@@ -9,15 +9,27 @@ function App() {
   const [plantPrice, setPlantPrice] = useState("");
   const [plantImage, setPlantImage] = useState("");
 
-  // Fetch plants when the component loads
+  // 1. Fetch all plants
   useEffect(() => {
     fetch("http://localhost:6001/plants")
-      .then((response) => response.json())
-      .then((data) => setPlants(data))
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to fetch plants");
+        }
+        return response.json();
+      })
+      .then((data) => {
+        const updatedPlants = data.map((plant) => ({
+          ...plant,
+          inStock: plant.inStock ?? true,
+        }));
+
+        setPlants(updatedPlants);
+      })
       .catch((error) => console.error("Error fetching plants:", error));
   }, []);
 
-  // Add a new plant
+  // 2. Add a new plant
   const handleSubmit = (event) => {
     event.preventDefault();
 
@@ -34,9 +46,17 @@ function App() {
       },
       body: JSON.stringify(newPlant),
     })
-      .then((response) => response.json())
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to add plant");
+        }
+        return response.json();
+      })
       .then((data) => {
-        setPlants((previousPlants) => [...previousPlants, data]);
+        setPlants((previousPlants) => [
+          ...previousPlants,
+          { ...data, inStock: data.inStock ?? true },
+        ]);
 
         setPlantName("");
         setPlantPrice("");
@@ -45,46 +65,38 @@ function App() {
       .catch((error) => console.error("Error adding plant:", error));
   };
 
-  // Toggle plant stock status
+  // 3. Toggle stock status
   const handleStockToggle = (plant) => {
-    const updatedPlant = {
-      ...plant,
-      inStock: !plant.inStock,
-    };
+    const updatedStock = !plant.inStock;
 
+    // Update the screen immediately
+    setPlants((previousPlants) =>
+      previousPlants.map((item) =>
+        item.id === plant.id
+          ? { ...item, inStock: updatedStock }
+          : item
+      )
+    );
+
+    // Update the backend
     fetch(`http://localhost:6001/plants/${plant.id}`, {
       method: "PATCH",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        inStock: updatedPlant.inStock,
+        inStock: updatedStock,
       }),
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error("Failed to update stock");
-        }
-
-        return response.json();
-      })
-      .then((data) => {
-        setPlants((previousPlants) =>
-          previousPlants.map((item) =>
-            item.id === plant.id ? { ...item, ...data } : item
-          )
-        );
-      })
-      .catch((error) => console.error("Error updating stock:", error));
+    }).catch((error) => console.error("Error updating stock:", error));
   };
 
-  // Filter plants by search and stock status
+  // 4. Search and filter plants
   const filteredPlants = plants.filter((plant) => {
     const matchesSearch = plant.name
       .toLowerCase()
       .includes(searchTerm.toLowerCase());
 
-    const matchesStock = !showInStock || plant.inStock;
+    const matchesStock = !showInStock || plant.inStock === true;
 
     return matchesSearch && matchesStock;
   });
